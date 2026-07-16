@@ -2,6 +2,7 @@ import tkinter as tk
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from tkinter import messagebox
+from ttkbootstrap.widgets.scrolled import ScrolledFrame
 
 from algorithms.fcfs import fcfs_scheduling
 from algorithms.sjf import sjf_scheduling
@@ -20,6 +21,10 @@ class CPUPage(tb.Frame):
         self.controller = controller
         self.row_widgets = []  # holds (pid_entry, arrival_entry, burst_entry, priority_entry)
         self.pid_colors = {}
+
+        # Scrollable container to make the entire window display scrollable
+        self.scroll_container = ScrolledFrame(self, autohide=True)
+        self.scroll_container.pack(fill="both", expand=True)
 
         self._build_header()
         self._build_controls()
@@ -42,7 +47,7 @@ class CPUPage(tb.Frame):
     # ---------- UI construction ----------
 
     def _build_header(self):
-        top = tb.Frame(self)
+        top = tb.Frame(self.scroll_container)
         top.pack(fill="x", padx=20, pady=(15, 10))
 
         btn_back = tb.Button(
@@ -59,7 +64,7 @@ class CPUPage(tb.Frame):
         lbl_title.pack(side="left", padx=15)
 
     def _build_controls(self):
-        bar = tb.Frame(self)
+        bar = tb.Frame(self.scroll_container)
         bar.pack(fill="x", padx=20, pady=10)
 
         # Gridding controls for a clean layout that doesn't jump
@@ -102,7 +107,7 @@ class CPUPage(tb.Frame):
         btn_run.grid(row=0, column=5, padx=5, pady=5, sticky="e")
 
     def _build_table_input(self):
-        self.input_frame = tb.Labelframe(self, text=" Process Configuration ", padding=15, bootstyle="secondary")
+        self.input_frame = tb.Labelframe(self.scroll_container, text=" Process Configuration ", padding=15, bootstyle="secondary")
         self.input_frame.pack(fill="x", padx=20, pady=10)
 
         self.table_grid = tb.Frame(self.input_frame)
@@ -127,7 +132,7 @@ class CPUPage(tb.Frame):
         self.hdr_pri.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
 
     def _build_output(self):
-        out = tb.Frame(self)
+        out = tb.Frame(self.scroll_container)
         out.pack(fill="both", expand=True, padx=20, pady=10)
 
         # Gantt Chart Card
@@ -172,14 +177,14 @@ class CPUPage(tb.Frame):
 
         self.wait_card = tb.Frame(self.stats_frame, bootstyle="dark", padding=10)
         self.wait_card.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.wait_title = tb.Label(self.wait_card, text="Average Waiting Time", font=("Segoe UI", 9), bootstyle="secondary")
+        self.wait_title = tb.Label(self.wait_card, text="Average Waiting Time", font=("Segoe UI", 9), bootstyle="light")
         self.wait_title.pack(anchor="w")
         self.wait_val = tb.Label(self.wait_card, text="0.00 ms", font=("Segoe UI", 16, "bold"), bootstyle="info")
         self.wait_val.pack(anchor="w", pady=(2, 0))
 
         self.turn_card = tb.Frame(self.stats_frame, bootstyle="dark", padding=10)
         self.turn_card.pack(side="left", fill="x", expand=True, padx=(10, 0))
-        self.turn_title = tb.Label(self.turn_card, text="Average Turnaround Time", font=("Segoe UI", 9), bootstyle="secondary")
+        self.turn_title = tb.Label(self.turn_card, text="Average Turnaround Time", font=("Segoe UI", 9), bootstyle="light")
         self.turn_title.pack(anchor="w")
         self.turn_val = tb.Label(self.turn_card, text="0.00 ms", font=("Segoe UI", 16, "bold"), bootstyle="success")
         self.turn_val.pack(anchor="w", pady=(2, 0))
