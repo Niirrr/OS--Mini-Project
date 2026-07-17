@@ -9,6 +9,7 @@ from algorithms.sjf import sjf_scheduling
 from algorithms.srtf import srtf_scheduling
 from algorithms.priority import priority_scheduling
 from algorithms.rr import rr_scheduling
+from gui.compare import CompareWindow
 
 GANTT_COLORS = ["#89b4fa", "#f38ba8", "#a6e3a1", "#f9e2af",
                 "#cba6f7", "#fab387", "#94e2d5", "#eba0ac"]
@@ -100,12 +101,19 @@ class CPUPage(tb.Frame):
         btn_rem = tb.Button(bar, text="- Remove Last", bootstyle="danger", command=self._remove_row, cursor="hand2")
         btn_rem.grid(row=0, column=4, padx=5, pady=5, sticky="w")
 
-        # Run Button aligned to the right (Col 5)
+        # Run Button (Col 5, right-aligned)
         btn_run = tb.Button(
             bar, text="▶ Run Simulation", bootstyle="primary", 
             command=self._run, cursor="hand2"
         )
         btn_run.grid(row=0, column=5, padx=5, pady=5, sticky="e")
+
+        # Compare Button (Col 6, right of Run)
+        btn_compare = tb.Button(
+            bar, text="⚖ Compare", bootstyle="outline-info",
+            command=self._compare, cursor="hand2"
+        )
+        btn_compare.grid(row=0, column=6, padx=(0, 5), pady=5, sticky="e")
 
     def _build_table_input(self):
         self.input_frame = tb.Labelframe(self.scroll_container, text=" Process Configuration ", padding=15, bootstyle="secondary")
@@ -340,6 +348,21 @@ class CPUPage(tb.Frame):
                 result = rr_scheduling(processes, quantum)
 
             self._render_result(result)
+        except ValueError as e:
+            messagebox.showerror("Input Error", str(e))
+
+    def _compare(self):
+        """Read current process inputs and open the comparison window."""
+        try:
+            processes = self._read_processes()
+            quantum = 2
+            try:
+                q = int(self.quantum_var.get().strip())
+                if q > 0:
+                    quantum = q
+            except ValueError:
+                pass
+            CompareWindow(self, processes, quantum)
         except ValueError as e:
             messagebox.showerror("Input Error", str(e))
 
