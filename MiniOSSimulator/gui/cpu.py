@@ -23,6 +23,7 @@ class CPUPage(tb.Frame):
         self.controller = controller
         self.row_widgets = []  # holds (pid_entry, arrival_entry, burst_entry, priority_entry)
         self.pid_colors = {}
+        self._anim_id   = None  # tracks the running after() animation
 
         # Scrollable container to make the entire window display scrollable
         self.scroll_container = ScrolledFrame(self, autohide=True)
@@ -141,14 +142,23 @@ class CPUPage(tb.Frame):
         self.hdr_pri.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
 
     def _build_output(self):
+        # Outer container — horizontal split: left (charts+results) | right (queue panel)
         out = tb.Frame(self.scroll_container)
         out.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # Gantt Chart Card
-        gantt_card = tb.Labelframe(out, text=" Gantt Chart Visualization ", padding=10, bootstyle="info")
+        # Left column: all existing Gantt + Results content
+        left_col = tb.Frame(out)
+        left_col.pack(side="left", fill="both", expand=True)
+
+        # Right column: live queue panel (fixed width)
+        right_col = tb.Frame(out, width=235)
+        right_col.pack(side="right", fill="y", padx=(12, 0))
+        right_col.pack_propagate(False)
+
+        # ── Gantt Chart Card (unchanged, now inside left_col) ──
+        gantt_card = tb.Labelframe(left_col, text=" Gantt Chart Visualization ", padding=10, bootstyle="info")
         gantt_card.pack(fill="x", pady=(0, 15))
 
-        # Horizontal Scrollbar and Canvas container
         self.gantt_container = tb.Frame(gantt_card)
         self.gantt_container.pack(fill="x", expand=True)
 
@@ -159,11 +169,10 @@ class CPUPage(tb.Frame):
         self.canvas.configure(xscrollcommand=self.hbar.set)
         self.hbar.pack(fill="x", pady=(5, 0))
 
-        # Results Labelframe
-        results_card = tb.Labelframe(out, text=" Simulation Results ", padding=10, bootstyle="success")
+        # ── Results Labelframe (unchanged, now inside left_col) ──
+        results_card = tb.Labelframe(left_col, text=" Simulation Results ", padding=10, bootstyle="success")
         results_card.pack(fill="both", expand=True)
 
-        # Scrollable Treeview Container
         tree_container = tb.Frame(results_card)
         tree_container.pack(fill="both", expand=True, pady=(0, 8))
 
@@ -175,8 +184,8 @@ class CPUPage(tb.Frame):
         self.tree.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
 
-        headings = ["PID", "Arrival Time", "Burst Time", "Start Time", "Completion Time",
-                    "Turnaround Time", "Waiting Time", "Response Time"]
+        headings  = ["PID", "Arrival Time", "Burst Time", "Start Time", "Completion Time",
+                     "Turnaround Time", "Waiting Time", "Response Time"]
         col_widths = [70, 90, 80, 80, 120, 110, 90, 100]
         for c, h, w in zip(cols, headings, col_widths):
             self.tree.heading(c, text=h)
@@ -186,7 +195,6 @@ class CPUPage(tb.Frame):
         self.stats_frame = tb.Frame(results_card)
         self.stats_frame.pack(fill="x", pady=(5, 0))
 
-        # ── Row 1: Avg Waiting Time & Avg Turnaround Time ──
         row1 = tb.Frame(self.stats_frame)
         row1.pack(fill="x", pady=(0, 8))
 
@@ -204,7 +212,6 @@ class CPUPage(tb.Frame):
         self.turn_val = tb.Label(self.turn_card, text="—", font=("Segoe UI", 16, "bold"), bootstyle="success")
         self.turn_val.pack(anchor="w", pady=(2, 0))
 
-        # ── Row 2: Avg Response Time, CPU Utilization, Throughput ──
         row2 = tb.Frame(self.stats_frame)
         row2.pack(fill="x")
 
@@ -225,6 +232,168 @@ class CPUPage(tb.Frame):
         tb.Label(self.thru_card, text="Throughput", font=("Segoe UI", 9), bootstyle="light").pack(anchor="w")
         self.thru_val = tb.Label(self.thru_card, text="—", font=("Segoe UI", 16, "bold"), bootstyle="secondary")
         self.thru_val.pack(anchor="w", pady=(2, 0))
+
+        # ── Live Queue Panel (new, right column) ──
+        self._build_queue_panel(right_col)
+
+    # ---------- Live Queue Panel ----------
+
+    def _build_queue_panel(self, parent):
+        """Create the static skeleton of the live queue monitor."""
+        panel = tb.Labelframe(
+            parent, text=" Live Queue Monitor ",
+            padding=(10, 8), bootstyle="warning"
+        )
+        panel.pack(fill="both", expand=True)
+
+        # ── Current Time ──────────────────────────────────────
+        tb.Label(panel, text="⏱  Current Time",
+                 font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(anchor="w")
+        self._panel_time_val = tb.Label(
+            panel, text="—",
+            font=("Segoe UI", 26, "bold"), bootstyle="warning"
+        )
+        self._panel_time_val.pack(anchor="w", pady=(0, 6))
+        tb.Separator(panel).pack(fill="x", pady=(0, 8))
+
+        # ── Running Process ───────────────────────────────────
+        tb.Label(panel, text="▶  Running Process",
+                 font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(anchor="w")
+        self._panel_running_val = tb.Label(
+            panel, text="—",
+            font=("Segoe UI", 15, "bold"), bootstyle="secondary",
+            padding=(6, 3)
+        )
+        self._panel_running_val.pack(anchor="w", pady=(4, 8))
+        tb.Separator(panel).pack(fill="x", pady=(0, 8))
+
+        # ── Ready Queue ───────────────────────────────────────
+        tb.Label(panel, text="📋  Ready Queue",
+                 font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(anchor="w")
+        self._panel_queue_inner = tb.Frame(panel)
+        self._panel_queue_inner.pack(fill="x", pady=(6, 8))
+        tb.Label(self._panel_queue_inner, text="—",
+                 font=("Segoe UI", 9), bootstyle="secondary").pack(anchor="w")
+        tb.Separator(panel).pack(fill="x", pady=(0, 8))
+
+        # ── Completed Processes ───────────────────────────────
+        tb.Label(panel, text="✓  Completed",
+                 font=("Segoe UI", 8, "bold"), bootstyle="secondary").pack(anchor="w")
+        self._panel_completed_inner = tb.Frame(panel)
+        self._panel_completed_inner.pack(fill="x", pady=(6, 0))
+        tb.Label(self._panel_completed_inner, text="—",
+                 font=("Segoe UI", 9), bootstyle="secondary").pack(anchor="w")
+
+    def _reset_queue_panel(self):
+        """Restore panel to its initial blank state."""
+        self._panel_time_val.config(text="—")
+        self._panel_running_val.config(text="—", bootstyle="secondary")
+        for w in self._panel_queue_inner.winfo_children():
+            w.destroy()
+        tb.Label(self._panel_queue_inner, text="—",
+                 font=("Segoe UI", 9), bootstyle="secondary").pack(anchor="w")
+        for w in self._panel_completed_inner.winfo_children():
+            w.destroy()
+        tb.Label(self._panel_completed_inner, text="—",
+                 font=("Segoe UI", 9), bootstyle="secondary").pack(anchor="w")
+
+    def _update_queue_panel(self, t, running_pid, ready, completed):
+        """Refresh all live-panel widgets for one animation frame."""
+        # Current time
+        self._panel_time_val.config(text=str(t))
+
+        # Running process
+        if running_pid:
+            self._panel_running_val.config(text=running_pid, bootstyle="success")
+        else:
+            self._panel_running_val.config(text="CPU Idle", bootstyle="secondary")
+
+        # Ready queue chips
+        for w in self._panel_queue_inner.winfo_children():
+            w.destroy()
+        if ready:
+            grid_frame = tb.Frame(self._panel_queue_inner)
+            grid_frame.pack(fill="x")
+            for idx, p in enumerate(ready):
+                color = self._color_for(p["pid"])
+                chip = tk.Label(
+                    grid_frame,
+                    text=p["pid"],
+                    font=("Segoe UI", 9, "bold"),
+                    bg=color, fg="#11121d",
+                    padx=7, pady=3,
+                    relief="flat"
+                )
+                chip.grid(row=idx // 3, column=idx % 3, padx=3, pady=3, sticky="w")
+        else:
+            tb.Label(self._panel_queue_inner, text="Empty",
+                     font=("Segoe UI", 9), bootstyle="secondary").pack(anchor="w")
+
+        # Completed list
+        for w in self._panel_completed_inner.winfo_children():
+            w.destroy()
+        if completed:
+            for p in completed:
+                tb.Label(
+                    self._panel_completed_inner,
+                    text=f"✓  {p['pid']}",
+                    font=("Segoe UI", 9),
+                    bootstyle="success"
+                ).pack(anchor="w", pady=1)
+        else:
+            tb.Label(self._panel_completed_inner, text="None yet",
+                     font=("Segoe UI", 9), bootstyle="secondary").pack(anchor="w")
+
+    # ---------- Animation ----------
+
+    def _start_animation(self, result):
+        """Cancel any in-progress animation and replay the new result."""
+        if self._anim_id is not None:
+            self.after_cancel(self._anim_id)
+            self._anim_id = None
+
+        gantt = result.get("gantt", [])
+        table = result.get("table", [])
+        if not gantt or not table:
+            self._reset_queue_panel()
+            return
+
+        max_time  = max(seg["end"]   for seg in gantt)
+        proc_info = {p["pid"]: p for p in table}
+
+        # Adaptive frame interval: fast for long simulations, slow for short ones
+        step_ms = max(80, min(500, 5000 // max_time)) if max_time > 0 else 300
+
+        self._anim_step(0, max_time, gantt, proc_info, step_ms)
+
+    def _anim_step(self, t, max_time, gantt, proc_info, step_ms):
+        """Execute one animation frame then schedule the next."""
+        # Find which process the CPU is running at time t
+        running_pid = None
+        for seg in gantt:
+            if seg["start"] <= t < seg["end"]:
+                running_pid = seg["pid"]
+                break
+
+        # Categorise processes
+        arrived        = [p for p in proc_info.values() if p["arrival"] <= t]
+        completed      = [p for p in proc_info.values() if p["finish"]  <= t]
+        completed_pids = {p["pid"] for p in completed}
+        ready          = [
+            p for p in arrived
+            if p["pid"] not in completed_pids and p["pid"] != running_pid
+        ]
+        ready.sort(key=lambda p: (p["arrival"], p["pid"]))
+
+        self._update_queue_panel(t, running_pid, ready, completed)
+
+        if t < max_time:
+            self._anim_id = self.after(
+                step_ms,
+                lambda: self._anim_step(t + 1, max_time, gantt, proc_info, step_ms)
+            )
+        else:
+            self._anim_id = None
 
     # ---------- dynamic rows ----------
 
@@ -372,6 +541,9 @@ class CPUPage(tb.Frame):
         return self.pid_colors[pid]
 
     def _render_result(self, result):
+        # Kick off the queue animation immediately (resets panel + replays)
+        self._start_animation(result)
+
         # Clear & fill Results Treeview
         for row in self.tree.get_children():
             self.tree.delete(row)
