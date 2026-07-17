@@ -19,7 +19,7 @@ python main.py
 ## What's Implemented
 
 - **FCFS** (First Come First Serve)
-- **SJF** (Shortest Job First, non-preemptive)
+- **SJF** (Shortest Job First, non-preemptive and preemptive both)
 - **Priority Scheduling** (non-preemptive, lower number = higher priority)
 - **Round Robin** (with configurable time quantum)
 
