@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import ttkbootstrap as tb
 from gui.home import HomePage
 from gui.cpu import CPUPage

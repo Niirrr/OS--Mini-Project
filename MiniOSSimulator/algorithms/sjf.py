@@ -40,12 +40,21 @@ def sjf_scheduling(processes):
             "finish": finish,
             "waiting": waiting,
             "turnaround": turnaround,
+            "response": start - chosen["arrival"],
         })
         gantt.append({"pid": chosen["pid"], "start": start, "end": finish})
         time = finish
 
     avg_wait = sum(r["waiting"] for r in completed) / n
     avg_turnaround = sum(r["turnaround"] for r in completed) / n
+    avg_response = sum(r["response"] for r in completed) / n
+
+    total_sim_time = max(r["finish"] for r in completed) - min(r["arrival"] for r in completed)
+    cpu_busy = sum(r["burst"] for r in completed)
+    cpu_utilization = (cpu_busy / total_sim_time * 100) if total_sim_time > 0 else 0.0
+    throughput = n / max(r["finish"] for r in completed) if max(r["finish"] for r in completed) > 0 else 0.0
 
     return {"table": completed, "gantt": gantt,
-            "avg_waiting": avg_wait, "avg_turnaround": avg_turnaround}
+            "avg_waiting": avg_wait, "avg_turnaround": avg_turnaround,
+            "avg_response": avg_response, "cpu_utilization": cpu_utilization,
+            "throughput": throughput}

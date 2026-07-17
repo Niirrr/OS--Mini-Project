@@ -6,6 +6,7 @@ from ttkbootstrap.widgets.scrolled import ScrolledFrame
 
 from algorithms.fcfs import fcfs_scheduling
 from algorithms.sjf import sjf_scheduling
+from algorithms.srtf import srtf_scheduling
 from algorithms.priority import priority_scheduling
 from algorithms.rr import rr_scheduling
 
@@ -75,8 +76,8 @@ class CPUPage(tb.Frame):
 
         self.algo_var = tb.StringVar(value="FCFS")
         self.algo_menu = tb.Combobox(
-            bar, textvariable=self.algo_var, state="readonly", width=22,
-            values=["FCFS", "SJF (Non-Preemptive)", "Priority (Non-Preemptive)", "Round Robin"]
+            bar, textvariable=self.algo_var, state="readonly", width=24,
+            values=["FCFS", "SJF (Non-Preemptive)", "SJF (Preemptive)", "Priority (Non-Preemptive)", "Round Robin"]
         )
         self.algo_menu.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         self.algo_menu.bind("<<ComboboxSelected>>", lambda e: self._refresh_column_visibility())
@@ -158,7 +159,7 @@ class CPUPage(tb.Frame):
         tree_container = tb.Frame(results_card)
         tree_container.pack(fill="both", expand=True, pady=(0, 8))
 
-        cols = ("pid", "arrival", "burst", "start", "finish", "turnaround", "waiting")
+        cols = ("pid", "arrival", "burst", "start", "finish", "turnaround", "waiting", "response")
         self.tree = tb.Treeview(tree_container, columns=cols, show="headings", height=5, bootstyle="success")
         self.tree.pack(side="left", fill="both", expand=True)
 
@@ -166,28 +167,56 @@ class CPUPage(tb.Frame):
         self.tree.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
 
-        headings = ["PID", "Arrival Time", "Burst Time", "Start Time", "Completion Time", "Turnaround Time", "Waiting Time"]
-        for c, h in zip(cols, headings):
+        headings = ["PID", "Arrival Time", "Burst Time", "Start Time", "Completion Time",
+                    "Turnaround Time", "Waiting Time", "Response Time"]
+        col_widths = [70, 90, 80, 80, 120, 110, 90, 100]
+        for c, h, w in zip(cols, headings, col_widths):
             self.tree.heading(c, text=h)
-            self.tree.column(c, width=100, anchor="center")
+            self.tree.column(c, width=w, anchor="center")
 
         # Stats Cards Footer
         self.stats_frame = tb.Frame(results_card)
         self.stats_frame.pack(fill="x", pady=(5, 0))
 
-        self.wait_card = tb.Frame(self.stats_frame, bootstyle="dark", padding=10)
-        self.wait_card.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.wait_title = tb.Label(self.wait_card, text="Average Waiting Time", font=("Segoe UI", 9), bootstyle="light")
+        # ── Row 1: Avg Waiting Time & Avg Turnaround Time ──
+        row1 = tb.Frame(self.stats_frame)
+        row1.pack(fill="x", pady=(0, 8))
+
+        self.wait_card = tb.Frame(row1, bootstyle="dark", padding=10)
+        self.wait_card.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self.wait_title = tb.Label(self.wait_card, text="Avg Waiting Time", font=("Segoe UI", 9), bootstyle="light")
         self.wait_title.pack(anchor="w")
-        self.wait_val = tb.Label(self.wait_card, text="0.00 ms", font=("Segoe UI", 16, "bold"), bootstyle="info")
+        self.wait_val = tb.Label(self.wait_card, text="—", font=("Segoe UI", 16, "bold"), bootstyle="info")
         self.wait_val.pack(anchor="w", pady=(2, 0))
 
-        self.turn_card = tb.Frame(self.stats_frame, bootstyle="dark", padding=10)
-        self.turn_card.pack(side="left", fill="x", expand=True, padx=(10, 0))
-        self.turn_title = tb.Label(self.turn_card, text="Average Turnaround Time", font=("Segoe UI", 9), bootstyle="light")
+        self.turn_card = tb.Frame(row1, bootstyle="dark", padding=10)
+        self.turn_card.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        self.turn_title = tb.Label(self.turn_card, text="Avg Turnaround Time", font=("Segoe UI", 9), bootstyle="light")
         self.turn_title.pack(anchor="w")
-        self.turn_val = tb.Label(self.turn_card, text="0.00 ms", font=("Segoe UI", 16, "bold"), bootstyle="success")
+        self.turn_val = tb.Label(self.turn_card, text="—", font=("Segoe UI", 16, "bold"), bootstyle="success")
         self.turn_val.pack(anchor="w", pady=(2, 0))
+
+        # ── Row 2: Avg Response Time, CPU Utilization, Throughput ──
+        row2 = tb.Frame(self.stats_frame)
+        row2.pack(fill="x")
+
+        self.resp_card = tb.Frame(row2, bootstyle="dark", padding=10)
+        self.resp_card.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        tb.Label(self.resp_card, text="Avg Response Time", font=("Segoe UI", 9), bootstyle="light").pack(anchor="w")
+        self.resp_val = tb.Label(self.resp_card, text="—", font=("Segoe UI", 16, "bold"), bootstyle="warning")
+        self.resp_val.pack(anchor="w", pady=(2, 0))
+
+        self.util_card = tb.Frame(row2, bootstyle="dark", padding=10)
+        self.util_card.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        tb.Label(self.util_card, text="CPU Utilization", font=("Segoe UI", 9), bootstyle="light").pack(anchor="w")
+        self.util_val = tb.Label(self.util_card, text="—", font=("Segoe UI", 16, "bold"), bootstyle="danger")
+        self.util_val.pack(anchor="w", pady=(2, 0))
+
+        self.thru_card = tb.Frame(row2, bootstyle="dark", padding=10)
+        self.thru_card.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        tb.Label(self.thru_card, text="Throughput", font=("Segoe UI", 9), bootstyle="light").pack(anchor="w")
+        self.thru_val = tb.Label(self.thru_card, text="—", font=("Segoe UI", 16, "bold"), bootstyle="secondary")
+        self.thru_val.pack(anchor="w", pady=(2, 0))
 
     # ---------- dynamic rows ----------
 
@@ -295,8 +324,10 @@ class CPUPage(tb.Frame):
 
             if algo == "FCFS":
                 result = fcfs_scheduling(processes)
-            elif algo.startswith("SJF"):
+            elif algo == "SJF (Non-Preemptive)":
                 result = sjf_scheduling(processes)
+            elif algo == "SJF (Preemptive)":
+                result = srtf_scheduling(processes)
             elif algo.startswith("Priority"):
                 result = priority_scheduling(processes)
             else:
@@ -324,12 +355,15 @@ class CPUPage(tb.Frame):
         for r in result["table"]:
             self.tree.insert("", "end", values=(
                 r["pid"], r["arrival"], r["burst"], r["start"], r["finish"],
-                r["turnaround"], r["waiting"]
+                r["turnaround"], r["waiting"], r["response"]
             ))
 
         # Update Summary Stats
         self.wait_val.config(text=f"{result['avg_waiting']:.2f} ms")
         self.turn_val.config(text=f"{result['avg_turnaround']:.2f} ms")
+        self.resp_val.config(text=f"{result['avg_response']:.2f} ms")
+        self.util_val.config(text=f"{result['cpu_utilization']:.2f}%")
+        self.thru_val.config(text=f"{result['throughput']:.4f} p/ms")
 
         # Render Gantt Chart
         self.canvas.delete("all")
